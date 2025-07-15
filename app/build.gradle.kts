@@ -5,6 +5,7 @@ plugins {
 }
 
 val weatherApiKey: String? by project
+val openUvApiKey: String? by project
 
 android {
     namespace = "com.example.revisiondeclima"
@@ -19,6 +20,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "WEATHER_API_KEY", "\"${weatherApiKey ?: ""}\"")
+        buildConfigField("String", "OPENUV_API_KEY", "\"${openUvApiKey ?: ""}\"")
     }
 
     buildTypes {
