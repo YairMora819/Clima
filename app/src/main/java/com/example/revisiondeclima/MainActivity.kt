@@ -6,20 +6,36 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import coil.compose.AsyncImage
 import com.example.revisiondeclima.ui.theme.RevisionDeClimaTheme
@@ -51,12 +67,7 @@ class MainActivity : ComponentActivity() {
                 1001
             )
         } else {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                location?.let {
-                    viewModel.fetchWeatherByCoords(it.latitude, it.longitude)
-                    viewModel.fetchForecastByCoords(it.latitude, it.longitude) // Trae el forecast también
-                }
-            }
+            getCurrentLocation()
         }
 
         setContent {
@@ -65,7 +76,23 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    WeatherScreen(viewModel)
+                    WeatherScreen(viewModel) { getCurrentLocation() }
+                }
+            }
+        }
+    }
+
+    private fun getCurrentLocation() {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                location?.let {
+                    viewModel.fetchWeatherByCoords(it.latitude, it.longitude)
+                    viewModel.fetchForecastByCoords(it.latitude, it.longitude)
+                    viewModel.fetchAirQualityByCoords(it.latitude, it.longitude)
                 }
             }
         }
@@ -74,154 +101,461 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WeatherScreen(viewModel: MainViewModel) {
+fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val forecastUiState by viewModel.forecastUiState.collectAsState()
+    val airQualityUiState by viewModel.airQualityUiState.collectAsState()
     var cityInput by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    val scrollState = rememberScrollState()
 
     val gradientColors = when ((uiState as? WeatherUiState.Success)?.weather?.weather?.firstOrNull()?.main) {
-        "Clear" -> listOf(Color(0xFF2193b0), Color(0xFF6dd5ed))
-        "Clouds" -> listOf(Color(0xFFbdc3c7), Color(0xFF2c3e50))
-        "Rain" -> listOf(Color(0xFF373B44), Color(0xFF4286f4))
-        else -> listOf(Color(0xFF83a4d4), Color(0xFFb6fbff))
+        "Clear" -> listOf(Color(0xFF87CEEB), Color(0xFFFFD700))
+        "Clouds" -> listOf(Color(0xFF708090), Color(0xFFD3D3D3))
+        "Rain" -> listOf(Color(0xFF4682B4), Color(0xFF191970))
+        "Snow" -> listOf(Color(0xFFE6E6FA), Color(0xFFB0C4DE))
+        "Thunderstorm" -> listOf(Color(0xFF2F2F2F), Color(0xFF4B0082))
+        "Drizzle" -> listOf(Color(0xFF4F94CD), Color(0xFF6495ED))
+        "Mist", "Fog" -> listOf(Color(0xFFD3D3D3), Color(0xFFA9A9A9))
+        else -> listOf(Color(0xFF87CEEB), Color(0xFFB0E0E6))
     }
+
+    val animatedGradient by animateColorAsState(
+        targetValue = gradientColors[0],
+        animationSpec = tween(durationMillis = 1000)
+    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(brush = Brush.verticalGradient(colors = gradientColors))
-            .padding(16.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Top,
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            OutlinedTextField(
-                value = cityInput,
+            // Barra de búsqueda mejorada
+            SearchBar(
+                cityInput = cityInput,
                 onValueChange = { cityInput = it },
-                label = { Text("Buscar ciudad") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
+                onSearch = {
                     focusManager.clearFocus()
                     if (cityInput.isNotBlank()) {
                         viewModel.fetchWeatherByCity(cityInput.trim())
-                        viewModel.fetchForecastByCoords(0.0, 0.0) // Opcional: actualizar forecast con la ciudad
+                        viewModel.fetchForecastByCity(cityInput.trim())
+                        viewModel.fetchAirQualityByCity(cityInput.trim())
                     }
-                }),
-                modifier = Modifier.fillMaxWidth()
+                },
+                onLocationRequest = onLocationRequest
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = getCurrentDateTime(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
+            // Fecha y hora
+            DateTimeCard()
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Información principal del clima
             when (uiState) {
-                is WeatherUiState.Loading -> CircularProgressIndicator()
+                is WeatherUiState.Loading -> {
+                    CircularProgressIndicator(color = Color.White)
+                }
                 is WeatherUiState.Success -> {
-                    val weather = (uiState as WeatherUiState.Success).weather
-
-                    Text(
-                        "Ciudad: ${weather.name}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        "Temperatura: ${weather.main.temp} °C",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        "Humedad: ${weather.main.humidity} %",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        weather.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() }
-                            ?: "",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
+                    val weather = uiState.weather
+                    MainWeatherCard(weather = weather)
                 }
                 is WeatherUiState.Error -> {
-                    Text(
-                        text = (uiState as WeatherUiState.Error).message,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
+                    ErrorCard(message = uiState.message)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Tarjetas de información adicional
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Calidad del aire
+                when (airQualityUiState) {
+                    is AirQualityUiState.Success -> {
+                        AirQualityCard(
+                            airQuality = airQualityUiState.airQuality,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    is AirQualityUiState.Loading -> {
+                        LoadingCard(
+                            title = "Calidad del Aire",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    is AirQualityUiState.Error -> {
+                        ErrorCard(
+                            message = "Error cargando calidad del aire",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // Índice UV (simulado)
+                if (uiState is WeatherUiState.Success) {
+                    UVIndexCard(
+                        uvIndex = (1..11).random(), // Simulado
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            if (uiState is WeatherUiState.Success) {
-                val iconCode = (uiState as WeatherUiState.Success).weather.weather.firstOrNull()?.icon
-                if (iconCode != null) {
-                    AsyncImage(
-                        model = "https://openweathermap.org/img/wn/${iconCode}@4x.png",
-                        contentDescription = "Icono del clima",
-                        modifier = Modifier.size(160.dp)
-                    )
+            // Pronóstico extendido
+            when (forecastUiState) {
+                is ForecastUiState.Success -> {
+                    ForecastCard(forecast = forecastUiState.forecast)
+                }
+                is ForecastUiState.Loading -> {
+                    LoadingCard(title = "Pronóstico")
+                }
+                is ForecastUiState.Error -> {
+                    ErrorCard(message = "Error cargando pronóstico")
                 }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
 
-            // Mostrar pronóstico básico
-            when (forecastUiState) {
-                is ForecastUiState.Loading -> {
-                    Text(
-                        "Cargando pronóstico...",
-                        color = Color.White,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                }
-                is ForecastUiState.Success -> {
-                    val forecast = (forecastUiState as ForecastUiState.Success).forecast
-                    Text(
-                        "Pronóstico para ${forecast.city.name}, ${forecast.city.country}",
-                        color = Color.White,
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchBar(
+    cityInput: String,
+    onValueChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onLocationRequest: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = cityInput,
+            onValueChange = onValueChange,
+            label = { Text("Buscar ciudad", color = Color.White.copy(alpha = 0.8f)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            modifier = Modifier.weight(1f),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color.White,
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            )
+        )
 
-                    // Por ejemplo, mostrar los primeros 5 items de forecast
-                    forecast.list.take(5).forEach { item ->
-                        ForecastItemRow(item)
-                    }
-                }
-                is ForecastUiState.Error -> {
-                    Text(
-                        "Error al cargar pronóstico: ${(forecastUiState as ForecastUiState.Error).message}",
-                        color = Color.Red,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
+        IconButton(
+            onClick = onLocationRequest,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.2f))
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = "Obtener ubicación",
+                tint = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+fun DateTimeCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Text(
+            text = getCurrentDateTime(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+fun MainWeatherCard(weather: WeatherResponse) {
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(durationMillis = 500)
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = weather.name,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "${weather.main.temp.toInt()}°C",
+                style = MaterialTheme.typography.displayLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Light
+            )
+
+            Text(
+                text = weather.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() } ?: "",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.9f)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Icono del clima
+            weather.weather.firstOrNull()?.icon?.let { iconCode ->
+                AsyncImage(
+                    model = "https://openweathermap.org/img/wn/${iconCode}@4x.png",
+                    contentDescription = "Icono del clima",
+                    modifier = Modifier.size(120.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Información adicional
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                WeatherDetailItem(
+                    label = "Humedad",
+                    value = "${weather.main.humidity}%"
+                )
+                WeatherDetailItem(
+                    label = "Sensación",
+                    value = "${weather.main.feelsLike?.toInt() ?: weather.main.temp.toInt()}°C"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun WeatherDetailItem(label: String, value: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.7f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun AirQualityCard(airQuality: AirQualityResponse, modifier: Modifier = Modifier) {
+    val aqi = airQuality.list.firstOrNull()?.main?.aqi ?: 1
+    val aqiColor = when (aqi) {
+        1 -> Color(0xFF4CAF50) // Buena
+        2 -> Color(0xFF8BC34A) // Aceptable
+        3 -> Color(0xFFFF9800) // Moderada
+        4 -> Color(0xFFFF5722) // Mala
+        5 -> Color(0xFFD32F2F) // Muy mala
+        else -> Color.Gray
+    }
+
+    val aqiText = when (aqi) {
+        1 -> "Buena"
+        2 -> "Aceptable"
+        3 -> "Moderada"
+        4 -> "Mala"
+        5 -> "Muy mala"
+        else -> "Desconocida"
+    }
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Calidad del Aire",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    .background(aqiColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = aqi.toString(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = aqiText,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+@Composable
+fun UVIndexCard(uvIndex: Int, modifier: Modifier = Modifier) {
+    val uvColor = when (uvIndex) {
+        in 0..2 -> Color(0xFF4CAF50) // Bajo
+        in 3..5 -> Color(0xFFFF9800) // Moderado
+        in 6..7 -> Color(0xFFFF5722) // Alto
+        in 8..10 -> Color(0xFFD32F2F) // Muy alto
+        else -> Color(0xFF9C27B0) // Extremo
+    }
+
+    val uvText = when (uvIndex) {
+        in 0..2 -> "Bajo"
+        in 3..5 -> "Moderado"
+        in 6..7 -> "Alto"
+        in 8..10 -> "Muy alto"
+        else -> "Extremo"
+    }
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Índice UV",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    .background(uvColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = uvIndex.toString(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = uvText,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+@Composable
+fun ForecastCard(forecast: ForecastResponse) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Pronóstico de 5 días",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(forecast.list.take(5)) { item ->
+                    ForecastItem(item)
                 }
             }
         }
@@ -229,29 +563,93 @@ fun WeatherScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-fun ForecastItemRow(item: ForecastItem) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+fun ForecastItem(item: ForecastItem) {
+    val dayOfWeek = SimpleDateFormat("EEE", Locale("es", "MX"))
+        .format(Date(item.dt * 1000))
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.1f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .width(80.dp)
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = dayOfWeek,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            AsyncImage(
+                model = "https://openweathermap.org/img/wn/${item.weather.firstOrNull()?.icon}@2x.png",
+                contentDescription = "Icono pronóstico",
+                modifier = Modifier.size(40.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "${item.main.temp.toInt()}°",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+fun LoadingCard(title: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White.copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+fun ErrorCard(message: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = Color.Red.copy(alpha = 0.2f)
+        ),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Text(
-            text = item.dtTxt,
-            modifier = Modifier.weight(1f),
+            text = message,
             color = Color.White,
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Text(
-            text = "${item.main.temp} °C",
-            modifier = Modifier.weight(1f),
-            color = Color.White,
-            style = MaterialTheme.typography.bodyMedium
-        )
-        AsyncImage(
-            model = "https://openweathermap.org/img/wn/${item.weather.firstOrNull()?.icon}@2x.png",
-            contentDescription = "Icono pronóstico",
-            modifier = Modifier.size(48.dp)
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(16.dp),
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -260,4 +658,3 @@ fun getCurrentDateTime(): String {
     val sdf = SimpleDateFormat("EEEE, d 'de' MMMM yyyy - HH:mm", Locale("es", "MX"))
     return sdf.format(Date())
 }
-
