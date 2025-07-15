@@ -18,6 +18,12 @@ sealed class ForecastUiState {
     data class Error(val message: String) : ForecastUiState()
 }
 
+sealed class AirQualityUiState {
+    object Loading : AirQualityUiState()
+    data class Success(val airQuality: AirQualityResponse) : AirQualityUiState()
+    data class Error(val message: String) : AirQualityUiState()
+}
+
 class MainViewModel : ViewModel() {
 
     private val weatherService = WeatherService.create()
@@ -29,6 +35,10 @@ class MainViewModel : ViewModel() {
     // Estado para el pronóstico
     private val _forecastUiState = MutableStateFlow<ForecastUiState>(ForecastUiState.Loading)
     val forecastUiState: StateFlow<ForecastUiState> = _forecastUiState
+
+    // Estado para la calidad del aire
+    private val _airQualityUiState = MutableStateFlow<AirQualityUiState>(AirQualityUiState.Loading)
+    val airQualityUiState: StateFlow<AirQualityUiState> = _airQualityUiState
 
     fun fetchWeatherByCity(city: String) {
         viewModelScope.launch {
@@ -65,5 +75,46 @@ class MainViewModel : ViewModel() {
             }
         }
     }
-}
 
+    fun fetchForecastByCity(city: String) {
+        viewModelScope.launch {
+            _forecastUiState.value = ForecastUiState.Loading
+            try {
+                val response = weatherService.getForecastByCity(city)
+                _forecastUiState.value = ForecastUiState.Success(response)
+            } catch (e: Exception) {
+                _forecastUiState.value = ForecastUiState.Error("Error: ${e.message ?: "desconocido"}")
+            }
+        }
+    }
+
+    fun fetchAirQualityByCoords(lat: Double, lon: Double) {
+        viewModelScope.launch {
+            _airQualityUiState.value = AirQualityUiState.Loading
+            try {
+                val response = weatherService.getAirQualityByCoords(lat, lon)
+                _airQualityUiState.value = AirQualityUiState.Success(response)
+            } catch (e: Exception) {
+                _airQualityUiState.value = AirQualityUiState.Error("Error: ${e.message ?: "desconocido"}")
+            }
+        }
+    }
+
+    fun fetchAirQualityByCity(city: String) {
+        viewModelScope.launch {
+            _airQualityUiState.value = AirQualityUiState.Loading
+            try {
+                // Primero obtenemos las coordenadas de la ciudad
+                val weatherResponse = weatherService.getCurrentWeatherByCity(city)
+                // Luego obtenemos la calidad del aire usando las coordenadas
+                val response = weatherService.getAirQualityByCoords(
+                    weatherResponse.coord.lat,
+                    weatherResponse.coord.lon
+                )
+                _airQualityUiState.value = AirQualityUiState.Success(response)
+            } catch (e: Exception) {
+                _airQualityUiState.value = AirQualityUiState.Error("Error: ${e.message ?: "desconocido"}")
+            }
+        }
+    }
+}

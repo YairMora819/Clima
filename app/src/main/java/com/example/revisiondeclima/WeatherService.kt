@@ -27,6 +27,19 @@ interface WeatherService {
         @Query("appid") apiKey: String = BuildConfig.WEATHER_API_KEY
     ): ForecastResponse
 
+    @GET("forecast?units=metric&lang=es")
+    suspend fun getForecastByCity(
+        @Query("q") city: String,
+        @Query("appid") apiKey: String = BuildConfig.WEATHER_API_KEY
+    ): ForecastResponse
+
+    @GET("air_pollution?")
+    suspend fun getAirQualityByCoords(
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double,
+        @Query("appid") apiKey: String = BuildConfig.WEATHER_API_KEY
+    ): AirQualityResponse
+
     companion object {
         private const val BASE_URL = "https://api.openweathermap.org/data/2.5/"
 
