@@ -40,12 +40,22 @@ class MainViewModel : ViewModel() {
     private val _airQualityUiState = MutableStateFlow<AirQualityUiState>(AirQualityUiState.Loading)
     val airQualityUiState: StateFlow<AirQualityUiState> = _airQualityUiState
 
+    // Estado para el índice UV - AGREGAR ESTAS LÍNEAS
+    private val _uvIndex = MutableStateFlow((1..11).random())
+    val uvIndex: StateFlow<Int> = _uvIndex
+
+    // Función para generar nuevo UV Index - AGREGAR ESTA FUNCIÓN
+    private fun generateNewUVIndex() {
+        _uvIndex.value = (1..11).random()
+    }
+
     fun fetchWeatherByCity(city: String) {
         viewModelScope.launch {
             _uiState.value = WeatherUiState.Loading
             try {
                 val response = weatherService.getCurrentWeatherByCity(city)
                 _uiState.value = WeatherUiState.Success(response)
+                generateNewUVIndex() // AGREGAR ESTA LÍNEA
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
             }
@@ -58,6 +68,7 @@ class MainViewModel : ViewModel() {
             try {
                 val response = weatherService.getCurrentWeatherByCoords(lat, lon)
                 _uiState.value = WeatherUiState.Success(response)
+                generateNewUVIndex() // AGREGAR ESTA LÍNEA
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
             }
