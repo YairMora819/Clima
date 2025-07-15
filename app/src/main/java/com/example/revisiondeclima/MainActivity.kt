@@ -109,7 +109,18 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
 
-    val gradientColors = when ((uiState as? WeatherUiState.Success)?.weather?.weather?.firstOrNull()?.main) {
+    // Almacenar los estados actuales en variables locales para evitar smart cast issues
+    val currentUiState = uiState
+    val currentForecastUiState = forecastUiState
+    val currentAirQualityUiState = airQualityUiState
+
+    val weatherMain = if (currentUiState is WeatherUiState.Success) {
+        currentUiState.weather.weather.firstOrNull()?.main
+    } else {
+        null
+    }
+
+    val gradientColors = when (weatherMain) {
         "Clear" -> listOf(Color(0xFF87CEEB), Color(0xFFFFD700))
         "Clouds" -> listOf(Color(0xFF708090), Color(0xFFD3D3D3))
         "Rain" -> listOf(Color(0xFF4682B4), Color(0xFF191970))
@@ -162,16 +173,16 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
 
             // Información principal del clima
-            when (uiState) {
+            when (currentUiState) {
                 is WeatherUiState.Loading -> {
                     CircularProgressIndicator(color = Color.White)
                 }
                 is WeatherUiState.Success -> {
-                    val weather = uiState.weather
+                    val weather = currentUiState.weather
                     MainWeatherCard(weather = weather)
                 }
                 is WeatherUiState.Error -> {
-                    ErrorCard(message = uiState.message)
+                    ErrorCard(message = currentUiState.message)
                 }
             }
 
@@ -183,10 +194,10 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Calidad del aire
-                when (airQualityUiState) {
+                when (currentAirQualityUiState) {
                     is AirQualityUiState.Success -> {
                         AirQualityCard(
-                            airQuality = airQualityUiState.airQuality,
+                            airQuality = currentAirQualityUiState.airQuality,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -205,7 +216,7 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
                 }
 
                 // Índice UV (simulado)
-                if (uiState is WeatherUiState.Success) {
+                if (currentUiState is WeatherUiState.Success) {
                     UVIndexCard(
                         uvIndex = (1..11).random(), // Simulado
                         modifier = Modifier.weight(1f)
@@ -216,9 +227,9 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
 
             // Pronóstico extendido
-            when (forecastUiState) {
+            when (currentForecastUiState) {
                 is ForecastUiState.Success -> {
-                    ForecastCard(forecast = forecastUiState.forecast)
+                    ForecastCard(forecast = currentForecastUiState.forecast)
                 }
                 is ForecastUiState.Loading -> {
                     LoadingCard(title = "Pronóstico")
