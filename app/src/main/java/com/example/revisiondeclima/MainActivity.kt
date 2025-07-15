@@ -105,6 +105,7 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val forecastUiState by viewModel.forecastUiState.collectAsState()
     val airQualityUiState by viewModel.airQualityUiState.collectAsState()
+    val uvIndex by viewModel.uvIndex.collectAsState() // ✅ AGREGADO: Observar el UV Index
     var cityInput by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
@@ -215,10 +216,10 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
                     }
                 }
 
-                // Índice UV (simulado)
+                // Índice UV - ✅ CORREGIDO: Usar el valor del ViewModel
                 if (currentUiState is WeatherUiState.Success) {
                     UVIndexCard(
-                        uvIndex = (1..11).random(), // Simulado
+                        uvIndex = uvIndex, // ✅ CAMBIADO: Usar el valor del StateFlow
                         modifier = Modifier.weight(1f)
                     )
                 }
