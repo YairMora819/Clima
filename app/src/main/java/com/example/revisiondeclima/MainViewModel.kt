@@ -27,6 +27,7 @@ sealed class AirQualityUiState {
 class MainViewModel : ViewModel() {
 
     private val weatherService = WeatherService.create()
+    private val openUVService = OpenUVService.create() // ✅ NUEVO: Servicio OpenUV
 
     // Estado para el clima actual
     private val _uiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
@@ -40,20 +41,31 @@ class MainViewModel : ViewModel() {
     private val _airQualityUiState = MutableStateFlow<AirQualityUiState>(AirQualityUiState.Loading)
     val airQualityUiState: StateFlow<AirQualityUiState> = _airQualityUiState
 
-    // ✅ CORREGIDO: Estado para el índice UV real
+    // Estado para el índice UV
     private val _uvIndex = MutableStateFlow(0)
     val uvIndex: StateFlow<Int> = _uvIndex
 
-    // ✅ NUEVA FUNCIÓN: Obtener UV Index real desde la API
+    // ✅ NUEVA FUNCIÓN: Obtener UV Index real desde OpenUV API
     private fun fetchUVIndex(lat: Double, lon: Double) {
         viewModelScope.launch {
             try {
-                val response = weatherService.getUVIndexByCoords(lat, lon)
-                _uvIndex.value = response.value.toInt()
+                val response = openUVService.getCurrentUV(lat, lon)
+                _uvIndex.value = response.result.uv.toInt()
             } catch (e: Exception) {
-                // Si falla, usar un valor por defecto
-                _uvIndex.value = 5
+                // Si falla OpenUV, usar un cálculo aproximado
+                _uvIndex.value = calculateApproximateUV()
             }
+        }
+    }
+
+    // ✅ FUNCIÓN DE RESPALDO: Cálculo aproximado si falla la API
+    private fun calculateApproximateUV(): Int {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return when {
+            hour < 6 || hour > 18 -> 0
+            hour in 6..9 || hour in 16..18 -> 3
+            hour in 10..15 -> 7
+            else -> 2
         }
     }
 
@@ -63,7 +75,7 @@ class MainViewModel : ViewModel() {
             try {
                 val response = weatherService.getCurrentWeatherByCity(city)
                 _uiState.value = WeatherUiState.Success(response)
-                // ✅ CORREGIDO: Obtener UV Index real usando las coordenadas
+                // ✅ CORREGIDO: Obtener UV Index real usando OpenUV
                 fetchUVIndex(response.coord.lat, response.coord.lon)
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
@@ -77,7 +89,7 @@ class MainViewModel : ViewModel() {
             try {
                 val response = weatherService.getCurrentWeatherByCoords(lat, lon)
                 _uiState.value = WeatherUiState.Success(response)
-                // ✅ CORREGIDO: Obtener UV Index real
+                // ✅ CORREGIDO: Obtener UV Index real usando OpenUV
                 fetchUVIndex(lat, lon)
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
