@@ -40,13 +40,21 @@ class MainViewModel : ViewModel() {
     private val _airQualityUiState = MutableStateFlow<AirQualityUiState>(AirQualityUiState.Loading)
     val airQualityUiState: StateFlow<AirQualityUiState> = _airQualityUiState
 
-    // Estado para el índice UV - AGREGAR ESTAS LÍNEAS
-    private val _uvIndex = MutableStateFlow((1..11).random())
+    // ✅ CORREGIDO: Estado para el índice UV real
+    private val _uvIndex = MutableStateFlow(0)
     val uvIndex: StateFlow<Int> = _uvIndex
 
-    // Función para generar nuevo UV Index - AGREGAR ESTA FUNCIÓN
-    private fun generateNewUVIndex() {
-        _uvIndex.value = (1..11).random()
+    // ✅ NUEVA FUNCIÓN: Obtener UV Index real desde la API
+    private fun fetchUVIndex(lat: Double, lon: Double) {
+        viewModelScope.launch {
+            try {
+                val response = weatherService.getUVIndexByCoords(lat, lon)
+                _uvIndex.value = response.value.toInt()
+            } catch (e: Exception) {
+                // Si falla, usar un valor por defecto
+                _uvIndex.value = 5
+            }
+        }
     }
 
     fun fetchWeatherByCity(city: String) {
@@ -55,7 +63,8 @@ class MainViewModel : ViewModel() {
             try {
                 val response = weatherService.getCurrentWeatherByCity(city)
                 _uiState.value = WeatherUiState.Success(response)
-                generateNewUVIndex() // AGREGAR ESTA LÍNEA
+                // ✅ CORREGIDO: Obtener UV Index real usando las coordenadas
+                fetchUVIndex(response.coord.lat, response.coord.lon)
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
             }
@@ -68,7 +77,8 @@ class MainViewModel : ViewModel() {
             try {
                 val response = weatherService.getCurrentWeatherByCoords(lat, lon)
                 _uiState.value = WeatherUiState.Success(response)
-                generateNewUVIndex() // AGREGAR ESTA LÍNEA
+                // ✅ CORREGIDO: Obtener UV Index real
+                fetchUVIndex(lat, lon)
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
             }

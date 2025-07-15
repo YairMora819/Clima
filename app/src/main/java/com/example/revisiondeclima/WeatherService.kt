@@ -40,6 +40,14 @@ interface WeatherService {
         @Query("appid") apiKey: String = BuildConfig.WEATHER_API_KEY
     ): AirQualityResponse
 
+    // ✅ AGREGAR ESTE ENDPOINT PARA UV INDEX
+    @GET("uvi?")
+    suspend fun getUVIndexByCoords(
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double,
+        @Query("appid") apiKey: String = BuildConfig.WEATHER_API_KEY
+    ): UVIndexResponse
+
     companion object {
         private const val BASE_URL = "https://api.openweathermap.org/data/2.5/"
 
