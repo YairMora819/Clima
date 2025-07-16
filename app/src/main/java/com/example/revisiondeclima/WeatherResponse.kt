@@ -24,7 +24,6 @@ data class Coord(
     val lon: Double
 )
 
-// Para pronóstico extendido (One Call API)
 data class OneCallResponse(
     val daily: List<DailyWeather>
 )

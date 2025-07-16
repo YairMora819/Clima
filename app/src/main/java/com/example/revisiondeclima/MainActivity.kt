@@ -110,7 +110,7 @@ fun WeatherScreen(viewModel: MainViewModel, onLocationRequest: () -> Unit) {
     val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
 
-    // Almacenar los estados actuales en variables locales para evitar smart cast issues
+
     val currentUiState = uiState
     val currentForecastUiState = forecastUiState
     val currentAirQualityUiState = airQualityUiState

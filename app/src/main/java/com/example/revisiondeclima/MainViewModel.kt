@@ -45,7 +45,7 @@ class MainViewModel : ViewModel() {
     private val _uvIndex = MutableStateFlow(0)
     val uvIndex: StateFlow<Int> = _uvIndex
 
-    // ✅ NUEVA FUNCIÓN: Obtener UV Index real desde OpenUV API
+    // Obtener UV Index real desde OpenUV API
     private fun fetchUVIndex(lat: Double, lon: Double) {
         viewModelScope.launch {
             try {
@@ -58,7 +58,7 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    // ✅ FUNCIÓN DE RESPALDO: Cálculo aproximado si falla la API
+    //  Cálculo aproximado si falla la API
     private fun calculateApproximateUV(): Int {
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         return when {
@@ -75,7 +75,7 @@ class MainViewModel : ViewModel() {
             try {
                 val response = weatherService.getCurrentWeatherByCity(city)
                 _uiState.value = WeatherUiState.Success(response)
-                // ✅ CORREGIDO: Obtener UV Index real usando OpenUV
+                //  Obtengo UV Index real usando OpenUV
                 fetchUVIndex(response.coord.lat, response.coord.lon)
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
@@ -89,7 +89,7 @@ class MainViewModel : ViewModel() {
             try {
                 val response = weatherService.getCurrentWeatherByCoords(lat, lon)
                 _uiState.value = WeatherUiState.Success(response)
-                // ✅ CORREGIDO: Obtener UV Index real usando OpenUV
+                //  Obtengo UV Index real usando OpenUV
                 fetchUVIndex(lat, lon)
             } catch (e: Exception) {
                 _uiState.value = WeatherUiState.Error("Error: ${e.message ?: "desconocido"}")
@@ -137,9 +137,9 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             _airQualityUiState.value = AirQualityUiState.Loading
             try {
-                // Primero obtenemos las coordenadas de la ciudad
+                // Primero se obtienen las coordenadas de la ciudad
                 val weatherResponse = weatherService.getCurrentWeatherByCity(city)
-                // Luego obtenemos la calidad del aire usando las coordenadas
+                // Luego se obtiene la calidad del aire usando las coordenadas
                 val response = weatherService.getAirQualityByCoords(
                     weatherResponse.coord.lat,
                     weatherResponse.coord.lon
